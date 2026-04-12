@@ -34,6 +34,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    /* Get the ANTHROPIC_API_KEY */
+    const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicApiKey) {
+      const errorResult = {
+        detail: "ANTHROPIC_API_KEY environment variable is not configured.",
+        status: 500,
+        appCustomCode: "Configuration error (3)"
+      };
+      return NextResponse.json(
+        { error: errorResult },
+        { status: errorResult.status }
+      );
+    }
+
     /* Get the sidecar URL from environment variables */
     const agentIdentity = process.env.AgentIdentity;
     if (!agentIdentity) {
@@ -107,7 +121,32 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      return NextResponse.json({ reply: result.authorizationHeader });
+
+
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": anthropicApiKey,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1024,
+          messages: [{ role: "user", content: Prompt }]
+        })
+      });
+      const data = await response.json();
+      console.log(data.content[0].text);
+      
+
+
+
+
+
+
+      return NextResponse.json({ reply: data.content[0].text });
     }
     catch (error) {
       /* If the authorization validation fails, return the error from the sidecar */
