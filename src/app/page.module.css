@@ -27,7 +27,7 @@
   align-items: flex-start;
   justify-content: space-between;
   background-color: var(--foreground);
-  padding: 120px 60px;
+  padding: 20px 20px;
 }
 
 .intro {
@@ -139,4 +139,74 @@ a.secondary {
     --button-secondary-hover: #1a1a1a;
     --button-secondary-border: #1a1a1a;
   }
+}
+
+/* Chat UI */
+.chatContainer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  overflow: hidden;
+}
+
+.chatMessages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 0;
+}
+
+.emptyState {
+  color: var(--text-secondary);
+  text-align: center;
+  margin-top: 40px;
+}
+
+.userMessage {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.assistantMessage {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.messageBubble {
+  max-width: 75%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.messageBubble p {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+}
+
+.userMessage .messageBubble {
+  background-color: #0d6efd;
+  color: #fff;
+}
+
+.assistantMessage .messageBubble {
+  background-color: #e9ecef;
+  color: #212529;
+}
+
+.chatInput {
+  display: flex;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid #dee2e6;
+}
+
+.chatInput textarea {
+  resize: none;
+  flex: 1;
 }
