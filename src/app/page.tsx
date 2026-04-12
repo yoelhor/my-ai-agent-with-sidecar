@@ -57,7 +57,7 @@ export default function Home() {
       } else {
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: `Error: ${data.error}` },
+          { role: "assistant", content: `${data.error}` },
         ]);
       }
     } catch {
