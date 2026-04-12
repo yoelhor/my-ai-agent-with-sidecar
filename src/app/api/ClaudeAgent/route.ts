@@ -1,4 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
+import Anthropic from '@anthropic-ai/sdk';
+
+function getRequiredEnv(
+  envName: string
+): { value: string } | { response: NextResponse } {
+  const value = process.env[envName];
+
+  if (!value) {
+    const errorResult = {
+      detail: `${envName} environment variable is not configured.`,
+      status: 500,
+      appCustomCode: `Configuration error`,
+    };
+
+    return {
+      response: NextResponse.json(
+        { error: errorResult },
+        { status: errorResult.status }
+      ),
+    };
+  }
+
+  return { value };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,47 +44,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    /* Get the sidecar URL from environment variables */
-    const sidecarUrl = process.env.SIDECAR_URL;
-    if (!sidecarUrl) {
-      const errorResult = {
-        detail: "SIDECAR_URL environment variable is not configured.",
-        status: 500,
-        appCustomCode: "Configuration error (1)"
-      };
-      return NextResponse.json(
-        { error: errorResult },
-        { status: errorResult.status }
-      );
+    /* Get the required environment variables */
+    const sidecarUrlResult = getRequiredEnv("SIDECAR_URL");
+    if ("response" in sidecarUrlResult) {
+      return sidecarUrlResult.response;
     }
+    const sidecarUrl = sidecarUrlResult.value;
 
-    /* Get the ANTHROPIC_API_KEY */
-    const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
-    if (!anthropicApiKey) {
-      const errorResult = {
-        detail: "ANTHROPIC_API_KEY environment variable is not configured.",
-        status: 500,
-        appCustomCode: "Configuration error (3)"
-      };
-      return NextResponse.json(
-        { error: errorResult },
-        { status: errorResult.status }
-      );
+    const mcpServerUrlResult = getRequiredEnv("MCP_SERVER_URL");
+    if ("response" in mcpServerUrlResult) {
+      return mcpServerUrlResult.response;
     }
+    const mcpServerUrl = mcpServerUrlResult.value;
 
-    /* Get the sidecar URL from environment variables */
-    const agentIdentity = process.env.AgentIdentity;
-    if (!agentIdentity) {
-      const errorResult = {
-        detail: "AgentIdentity environment variable is not configured.",
-        status: 500,
-        appCustomCode: "Configuration error (2)"
-      };
-      return NextResponse.json(
-        { error: errorResult },
-        { status: errorResult.status }
-      );
+    const anthropicApiKeyResult = getRequiredEnv("ANTHROPIC_API_KEY");
+    if ("response" in anthropicApiKeyResult) {
+      return anthropicApiKeyResult.response;
     }
+    const anthropicApiKey = anthropicApiKeyResult.value;
+
+    const agentIdentityResult = getRequiredEnv("AgentIdentity");
+    if ("response" in agentIdentityResult) {
+      return agentIdentityResult.response;
+    }
+    const agentIdentity = agentIdentityResult.value;
 
     /* Get the authorization header from the request */
     const authHeader = request.headers.get("authorization");
@@ -121,32 +128,51 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const authorizationToken = result.authorizationHeader;
 
 
+      //console.log("***** Authorization validation result:", result.authorizationHeader);
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": anthropicApiKey,
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1024,
-          messages: [{ role: "user", content: Prompt }]
-        })
+      /***********/
+      const client = new Anthropic({
+        apiKey: anthropicApiKey
       });
-      const data = await response.json();
-      console.log(data.content[0].text);
-      
+
+      const message = await client.beta.messages.create({
+        max_tokens: 1024,
+        messages: [{ role: "user", content: Prompt }],
+        model: "claude-opus-4-6",
+        system: [
+          {
+            type: "text",
+            text: "You can use tools from the connected MCP server. Discover tools from that server and call them when their descriptions indicate they are relevant to the user's request."
+          }
+        ],
+        mcp_servers: [
+          {
+            type: "url",
+            name: "remoteMcp",
+            url: mcpServerUrl,
+            authorization_token: authorizationToken
+          }
+        ],
+        tools: [
+          {
+            type: "mcp_toolset",
+            mcp_server_name: "remoteMcp"
+          }
+        ],
+        betas: ["mcp-client-2025-11-20"]
+      });
 
 
+      console.log(message.content);
 
+      /* Return the text content from the message */
+      const textContent = message.content.map((item: any) => item.text).join("\n");
+      return NextResponse.json({ reply: textContent });
 
-
-
-      return NextResponse.json({ reply: data.content[0].text });
+      /***************/
     }
     catch (error) {
       /* If the authorization validation fails, return the error from the sidecar */
@@ -155,7 +181,7 @@ export async function POST(request: NextRequest) {
       const errorResult = {
         detail: error instanceof Error ? error.message : "Unknown authentication error",
         status: 500,
-        AppCustomCode: "Authentication error (3)"
+        appCustomCode: "General error"
       };
 
       return NextResponse.json(
