@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useIsAuthenticated } from "@azure/msal-react";
+import { useIsAuthenticated, useMsal } from "@azure/msal-react";
 import { Button, Form, Spinner } from "react-bootstrap";
+import { loginRequest } from "./authConfig";
 import styles from "./page.module.css";
 
 interface Message {
@@ -12,6 +13,7 @@ interface Message {
 
 export default function Home() {
   const isAuthenticated = useIsAuthenticated();
+  const { instance, accounts } = useMsal();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -31,9 +33,17 @@ export default function Home() {
     setLoading(true);
 
     try {
+      const tokenResponse = await instance.acquireTokenSilent({
+        ...loginRequest,
+        account: accounts[0],
+      });
+
       const res = await fetch("/api/ClaudeAgent", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${tokenResponse.accessToken}`,
+        },
         body: JSON.stringify({ Prompt: prompt }),
       });
 
