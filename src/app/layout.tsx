@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import MsalProviderWrapper from "@/components/MsalProviderWrapper";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,7 +25,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <MsalProviderWrapper>{children}</MsalProviderWrapper>
+      </body>
     </html>
   );
 }
