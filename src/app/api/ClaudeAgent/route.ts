@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from '@anthropic-ai/sdk';
+import { log } from "console";
 
 function getRequiredEnv(
   envName: string
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
     if ("response" in sidecarUrlResult) {
       return sidecarUrlResult.response;
     }
-    const sidecarUrl = sidecarUrlResult.value;
+    const sidecarUrl = sidecarUrlResult.value.replace(/\/+$/, "");
 
     const mcpServerUrlResult = getRequiredEnv("MCP_SERVER_URL");
     if ("response" in mcpServerUrlResult) {
@@ -86,38 +87,23 @@ export async function POST(request: NextRequest) {
     }
 
     /* Call the sidecar's Validate endpoint */
-    const baseUrl = sidecarUrl.replace(/\/+$/, "");
-
-    // try {
-    //   const validateResponse = await fetch(`${baseUrl}/Validate`, {
-    //     method: "GET",
-    //     headers: {
-    //       Authorization: authHeader,
-    //     },
-    //   });
-
-    //   const validateResult = await validateResponse.json();
-    // } 
-    // catch (error) {
-    //   /* If the authorization validation fails, return the error from the sidecar */
-    //   return NextResponse.json(
-    //     { error: error instanceof Error ? "Authentication error (3): " + error.message : "Unknown authentication error" },
-    //     { status: 401 }
-    //   );
-    // }
-
+    var authorizationToken;
     try {
-      const validateResponse = await fetch(`${baseUrl}/AuthorizationHeader/Graph?AgentIdentity=${agentIdentity}`, {
+      console.log("**** Calling sidecar Validate endpoint:", `${sidecarUrl}/AuthorizationHeader/Graph?AgentIdentity=${agentIdentity}`);
+      const validateResponse = await fetch(`${sidecarUrl}/AuthorizationHeader/Graph?AgentIdentity=${agentIdentity}`, {
         method: "GET",
         headers: {
           Authorization: authHeader,
         },
       });
 
+
       const result = await validateResponse.json();
 
       /* Check if the response contains "status" and it's not 200 */
       if (result.status && result.status !== 200) {
+
+        console.log("**** Authorization validation failed:", result);
 
         /* Add app custom code to the result */
         result.AppCustomCode = "Authentication error (2)"
@@ -127,11 +113,11 @@ export async function POST(request: NextRequest) {
           { status: 401 }
         );
       }
+      else {
+        authorizationToken = result.authorizationHeader;
+      }
 
-      const authorizationToken = result.authorizationHeader;
-
-
-      //console.log("***** Authorization validation result:", result.authorizationHeader);
+      console.log("***** Authorization validation result:", result.authorizationHeader);
 
       /***********/
       const client = new Anthropic({
@@ -179,7 +165,7 @@ export async function POST(request: NextRequest) {
 
       /* Create an error JSON object with following attributes: detail, status and AppCustomCode */
       const errorResult = {
-        detail: error instanceof Error ? error.message : "Unknown authentication error",
+        detail: error instanceof Error ? error.message : "Unknown error",
         status: 500,
         appCustomCode: "General error"
       };
