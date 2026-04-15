@@ -1,0 +1,192 @@
+import { NextRequest, NextResponse } from "next/server";
+import Anthropic from '@anthropic-ai/sdk';
+import { log } from "console";
+
+function getRequiredEnv(
+  envName: string
+): { value: string } | { response: NextResponse } {
+  const value = process.env[envName];
+
+  if (!value) {
+    const errorResult = {
+      detail: `${envName} environment variable is not configured.`,
+      status: 500,
+      appCustomCode: `Configuration error`,
+    };
+
+    return {
+      response: NextResponse.json(
+        { error: errorResult },
+        { status: errorResult.status }
+      ),
+    };
+  }
+
+  return { value };
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { Prompt } = body;
+
+    // Check if the Prompt is valid and no longer than 200 characters
+    if (!Prompt || typeof Prompt !== "string" || Prompt.length > 200) {
+
+      const errorResult = {
+        detail: "Prompt is required, must be a string, and cannot exceed 200 characters.",
+        status: 400,
+        appCustomCode: "Input parameter error (1)"
+      };
+
+      return NextResponse.json(
+        { error: errorResult },
+        { status: errorResult.status }
+      );
+    }
+
+    /* Get the required environment variables */
+    const sidecarUrlResult = getRequiredEnv("SIDECAR_URL");
+    if ("response" in sidecarUrlResult) {
+      return sidecarUrlResult.response;
+    }
+    const sidecarUrl = sidecarUrlResult.value.replace(/\/+$/, "");
+
+    const mcpServerUrlResult = getRequiredEnv("MCP_SERVER_URL");
+    if ("response" in mcpServerUrlResult) {
+      return mcpServerUrlResult.response;
+    }
+    const mcpServerUrl = mcpServerUrlResult.value;
+
+    const anthropicApiKeyResult = getRequiredEnv("ANTHROPIC_API_KEY");
+    if ("response" in anthropicApiKeyResult) {
+      return anthropicApiKeyResult.response;
+    }
+    const anthropicApiKey = anthropicApiKeyResult.value;
+
+    const agentIdentityResult = getRequiredEnv("AgentIdentity");
+    if ("response" in agentIdentityResult) {
+      return agentIdentityResult.response;
+    }
+    const agentIdentity = agentIdentityResult.value;
+
+    /* Get the authorization header from the request */
+    const authHeader = request.headers.get("authorization");
+    if (!authHeader) {
+
+      const errorResult = {
+        detail: "Authorization header is missing.",
+        status: 401,
+        appCustomCode: "Authentication error (1)"
+      };
+
+      return NextResponse.json(
+        { error: errorResult },
+        { status: errorResult.status }
+      );
+    }
+
+    /* Call the sidecar's Validate endpoint */
+    var authorizationToken;
+    try {
+      console.log("**** Calling sidecar Validate endpoint:", `${sidecarUrl}/AuthorizationHeader/Graph?AgentIdentity=${agentIdentity}`);
+      const validateResponse = await fetch(`${sidecarUrl}/AuthorizationHeader/Graph?AgentIdentity=${agentIdentity}`, {
+        method: "GET",
+        headers: {
+          Authorization: authHeader,
+        },
+      });
+
+
+      const result = await validateResponse.json();
+
+      /* Check if the response contains "status" and it's not 200 */
+      if (result.status && result.status !== 200) {
+
+        console.log("**** Authorization validation failed:", result);
+
+        /* Add app custom code to the result */
+        result.AppCustomCode = "Authentication error (2)"
+
+        return NextResponse.json(
+          { error: result },
+          { status: 401 }
+        );
+      }
+      else {
+        authorizationToken = result.authorizationHeader;
+      }
+
+      console.log("***** Authorization validation result:", result.authorizationHeader);
+
+      /***********/
+      const client = new Anthropic({
+        apiKey: anthropicApiKey
+      });
+
+      const message = await client.beta.messages.create({
+        max_tokens: 1024,
+        messages: [{ role: "user", content: Prompt }],
+        model: "claude-opus-4-6",
+        system: [
+          {
+            type: "text",
+            text: "You can use tools from the connected MCP server. Discover tools from that server and call them when their descriptions indicate they are relevant to the user's request."
+          }
+        ],
+        mcp_servers: [
+          {
+            type: "url",
+            name: "remoteMcp",
+            url: mcpServerUrl,
+            authorization_token: authorizationToken
+          }
+        ],
+        tools: [
+          {
+            type: "mcp_toolset",
+            mcp_server_name: "remoteMcp"
+          }
+        ],
+        betas: ["mcp-client-2025-11-20"]
+      });
+
+
+      console.log(message.content);
+
+      /* Return the text content from the message */
+      const textContent = message.content.map((item: any) => item.text).join("\n");
+      return NextResponse.json({ reply: textContent });
+
+      /***************/
+    }
+    catch (error) {
+      /* If the authorization validation fails, return the error from the sidecar */
+
+      /* Create an error JSON object with following attributes: detail, status and AppCustomCode */
+      const errorResult = {
+        detail: error instanceof Error ? error.message : "Unknown error",
+        status: 500,
+        appCustomCode: "General error"
+      };
+
+      return NextResponse.json(
+        { error: errorResult },
+        { status: 400 }
+      );
+    }
+
+
+
+
+    /* Return the result from the sidecar */
+    const reply = `${Prompt}`;
+    return NextResponse.json({ reply });
+
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
+  }
+}
