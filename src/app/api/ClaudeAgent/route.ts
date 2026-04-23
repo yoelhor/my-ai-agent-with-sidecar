@@ -86,11 +86,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    /* Call the sidecar's Validate endpoint */
+    /* Call the sidecar's authorization endpoint */
     var authorizationToken;
     try {
-      console.log("**** Calling sidecar Validate endpoint:", `${sidecarUrl}/AuthorizationHeader/Graph?AgentIdentity=${agentIdentity}`);
-      const validateResponse = await fetch(`${sidecarUrl}/AuthorizationHeader/Graph?AgentIdentity=${agentIdentity}`, {
+      const sidecarAuthUrl = `${sidecarUrl}/AuthorizationHeader/MyApi?AgentIdentity=${agentIdentity}`;
+      console.log("**** Calling sidecar authorization endpoint:", sidecarAuthUrl);
+      const validateResponse = await fetch(sidecarAuthUrl, {
         method: "GET",
         headers: {
           Authorization: authHeader,
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
         console.log("**** Authorization validation failed:", result);
 
         /* Add app custom code to the result */
-        result.AppCustomCode = "Authentication error (2)"
+        result.appCustomCode = "Authentication error (2)"
 
         return NextResponse.json(
           { error: result },
