@@ -86,12 +86,49 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    /* Call the sidecar's authorization endpoint */
+
+
+    /* Call the sidecar's authorization endpoint to get application token */
+    /* To make it work make sure to include the following enviromant variables:
+        - DownstreamApis__AppToken__RequestAppToken = ture
+        - DownstreamApis__AppToken__Scopes__0 = https://your-api/.default */
+    const appTokenSidecarUrl = `${sidecarUrl}/AuthorizationHeaderUnauthenticated/AppToken?AgentIdentity=${agentIdentity}&optionsOverride.AcquireTokenOptions.ForceRefresh=true`;
+    console.log("**** Calling sidecar authorization endpoint:", appTokenSidecarUrl);
+    const appTokenResponse = await fetch(appTokenSidecarUrl, {
+      method: "GET"
+    });
+
+
+    const appTokenResult = await appTokenResponse.json();
+    // console.log("***** Authorization validation (app token) result:", appTokenResult);
+    // console.log("");
+
+
+    /* Call the sidecar's authorization endpoint to get application token */
+    /* To make it work make sure to include the following enviromant variables:
+        - Do NOT!!! set up DownstreamApis__AgentUserToken__RequestAppToken to true
+        - DownstreamApis__AgentUserToken__Scopes__0 = https://your-api/.default 
+        - Change the AgentIdentity to the agent user identity
+        - Change the AgentUsername to the agent user's username */
+        
+    const agentUserTokenSidecarUrl = `${sidecarUrl}/AuthorizationHeaderUnauthenticated/AgentUserToken?AgentIdentity=e65ad39a-8e20-4f17-acb6-1bf5dfb13ac0&AgentUsername=agent-user@ta6252.onmicrosoft.com&optionsOverride.AcquireTokenOptions.ForceRefresh=true`;
+    console.log("**** Calling sidecar authorization endpoint:", agentUserTokenSidecarUrl);
+    const agentUserTokenResponse = await fetch(agentUserTokenSidecarUrl, {
+      method: "GET"
+    });
+
+
+    const agentUserTokenResult = await agentUserTokenResponse.json();
+    console.log("***** Authorization validation (agent user token) result:", agentUserTokenResult);
+    console.log("");
+
+    
+    /* Call the sidecar's authorization endpoint to exchange the user's token for a new one (OBO flow) */
     var authorizationToken;
     try {
-      const sidecarAuthUrl = `${sidecarUrl}/AuthorizationHeader/MyApi?AgentIdentity=${agentIdentity}`;
-      console.log("**** Calling sidecar authorization endpoint:", sidecarAuthUrl);
-      const validateResponse = await fetch(sidecarAuthUrl, {
+      const oboTokenSidecarUrl = `${sidecarUrl}/AuthorizationHeader/MyApi?AgentIdentity=${agentIdentity}&optionsOverride.AcquireTokenOptions.ForceRefresh=true`;
+      console.log("**** Calling sidecar authorization endpoint:", oboTokenSidecarUrl);
+      const oboTokenResponse = await fetch(oboTokenSidecarUrl, {
         method: "GET",
         headers: {
           Authorization: authHeader,
@@ -99,26 +136,27 @@ export async function POST(request: NextRequest) {
       });
 
 
-      const result = await validateResponse.json();
+      const oboTokenResult = await oboTokenResponse.json();
 
       /* Check if the response contains "status" and it's not 200 */
-      if (result.status && result.status !== 200) {
+      if (oboTokenResult.status && oboTokenResult.status !== 200) {
 
-        console.log("**** Authorization validation failed:", result);
+        console.log("**** Authorization validation failed:", oboTokenResult);
 
         /* Add app custom code to the result */
-        result.appCustomCode = "Authentication error (2)"
+        oboTokenResult.appCustomCode = "Authentication error (2)"
 
         return NextResponse.json(
-          { error: result },
+          { error: oboTokenResult },
           { status: 401 }
         );
       }
       else {
-        authorizationToken = result.authorizationHeader;
+        authorizationToken = oboTokenResult.authorizationHeader;
+        //console.log("***** Authorization validation (on-behalf-of flow) result:", oboTokenResult.authorizationHeader);
       }
 
-      console.log("***** Authorization validation result:", result.authorizationHeader);
+      
 
       /***********/
       const client = new Anthropic({
