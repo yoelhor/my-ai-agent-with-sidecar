@@ -6,8 +6,8 @@ import { Configuration, LogLevel } from "@azure/msal-browser";
  */
 export const msalConfig: Configuration = {
     auth: {
-        clientId: "3f3865e0-d0a7-4b4b-b731-109942fac5fb",
-        authority: "https://login.microsoftonline.com/d4bc1473-02ff-4b6a-a30d-cacf41c287d5", //  Replace the placeholder with your tenant info
+        clientId: "739bdefd-7c03-4e81-ae50-89c858fb2d08",
+        authority: "https://login.microsoftonline.com/61ce3eb4-4692-48a4-9af5-a63f5be45418", //  Replace the placeholder with your tenant info
         redirectUri: 'http://localhost:3000', // You must register this URI on App Registration.
     },
     cache: {
@@ -45,7 +45,7 @@ export const msalConfig: Configuration = {
  * https://learn.microsoft.com/en-us/entra/identity-platform/permissions-consent-overview#openid-connect-scopes
  */
 export const loginRequest = {
-    scopes: ["api://fc1e4b07-712a-461f-93ad-8f9d6433791f/access_agent"],
+    scopes: ["api://12fc29c0-ad16-49b4-be9a-e4a5a91ef628/access_agent"],
 };
 
 /**

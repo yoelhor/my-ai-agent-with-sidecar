@@ -70,6 +70,20 @@ export async function POST(request: NextRequest) {
     }
     const agentIdentity = agentIdentityResult.value;
 
+
+    const agentUserAccountIdentityResult = getRequiredEnv("AgentUserAccountIdentity");
+    if ("response" in agentUserAccountIdentityResult) {
+      return agentUserAccountIdentityResult.response;
+    }
+    const agentUserAccountIdentity = agentUserAccountIdentityResult.value;
+
+
+    const agentUserAccountUpnResult = getRequiredEnv("AgentUserAccountUpn");
+    if ("response" in agentUserAccountUpnResult) {
+      return agentUserAccountUpnResult.response;
+    }
+    const agentUserAccountUpn = agentUserAccountUpnResult.value;
+
     /* Get the authorization header from the request */
     const authHeader = request.headers.get("authorization");
     if (!authHeader) {
@@ -86,48 +100,60 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    var authFlow = "application token flow";
+
+    try {
+      /* Call the sidecar's authorization endpoint to get application token */
+      /* To make it work make sure to include the following enviromant variables:
+          - DownstreamApis__AppToken__RequestAppToken = ture
+          - DownstreamApis__AppToken__Scopes__0 = https://your-api/.default */
+      const appTokenSidecarUrl = `${sidecarUrl}/AuthorizationHeaderUnauthenticated/AppToken?AgentIdentity=${agentIdentity}&optionsOverride.AcquireTokenOptions.ForceRefresh=true`;
+      console.log(`**** Calling sidecar endpoint (${authFlow}):`, appTokenSidecarUrl);
+      const appTokenResponse = await fetch(appTokenSidecarUrl, {
+        method: "GET"
+      });
 
 
-    /* Call the sidecar's authorization endpoint to get application token */
-    /* To make it work make sure to include the following enviromant variables:
-        - DownstreamApis__AppToken__RequestAppToken = ture
-        - DownstreamApis__AppToken__Scopes__0 = https://your-api/.default */
-    const appTokenSidecarUrl = `${sidecarUrl}/AuthorizationHeaderUnauthenticated/AppToken?AgentIdentity=${agentIdentity}&optionsOverride.AcquireTokenOptions.ForceRefresh=true`;
-    console.log("**** Calling sidecar authorization endpoint:", appTokenSidecarUrl);
-    const appTokenResponse = await fetch(appTokenSidecarUrl, {
-      method: "GET"
-    });
+      const appTokenResult = await appTokenResponse.json();
+      console.log(`***** Authorization validation (${authFlow}) result:`, appTokenResult);
+      console.log("");
+    }
+    catch (error) {
+      console.error(`**** Authorization validation (${authFlow}) failed:`, error instanceof Error ? error.message : error);
+    }
+
+    try {
+      /* Call the sidecar's authorization endpoint to get agent's user account token */
+      /* To make it work make sure to include the following enviromant variables:
+          - Do NOT!!! set up DownstreamApis__AgentUserToken__RequestAppToken to true
+          - DownstreamApis__AgentUserToken__Scopes__0 = https://graph.microsoft.com/User.Read, or something like api://12345678-1223-9876-5432-123456778812/mymcp.read 
+          - Change the AgentIdentity to the agent user identity
+          - Change the AgentUsername to the agent user's username */
+      authFlow = "agent's user account flow";
+      const agentUserTokenSidecarUrl = `${sidecarUrl}/AuthorizationHeaderUnauthenticated/AgentUserToken?AgentIdentity=${agentUserAccountIdentity}&AgentUsername=${agentUserAccountUpn}&optionsOverride.AcquireTokenOptions.ForceRefresh=true`;
+      console.log(`**** Calling sidecar endpoint (${authFlow}):`, agentUserTokenSidecarUrl);
+      const agentUserTokenResponse = await fetch(agentUserTokenSidecarUrl, {
+        method: "GET"
+      });
+
+      const agentUserTokenResult = await agentUserTokenResponse.json();
+      console.log(`***** Authorization validation (${authFlow}) result:`, agentUserTokenResult);
+      console.log("");
+    }
+    catch (error) {
+      console.error(`**** Authorization validation (${authFlow}) failed:`, error instanceof Error ? error.message : error);
+    }
 
 
-    const appTokenResult = await appTokenResponse.json();
-    // console.log("***** Authorization validation (app token) result:", appTokenResult);
-    // console.log("");
-
-
-    /* Call the sidecar's authorization endpoint to get application token */
-    /* To make it work make sure to include the following enviromant variables:
-        - Do NOT!!! set up DownstreamApis__AgentUserToken__RequestAppToken to true
-        - DownstreamApis__AgentUserToken__Scopes__0 = https://your-api/.default 
-        - Change the AgentIdentity to the agent user identity
-        - Change the AgentUsername to the agent user's username */
-        
-    const agentUserTokenSidecarUrl = `${sidecarUrl}/AuthorizationHeaderUnauthenticated/AgentUserToken?AgentIdentity=e65ad39a-8e20-4f17-acb6-1bf5dfb13ac0&AgentUsername=agent-user@ta6252.onmicrosoft.com&optionsOverride.AcquireTokenOptions.ForceRefresh=true`;
-    console.log("**** Calling sidecar authorization endpoint:", agentUserTokenSidecarUrl);
-    const agentUserTokenResponse = await fetch(agentUserTokenSidecarUrl, {
-      method: "GET"
-    });
-
-
-    const agentUserTokenResult = await agentUserTokenResponse.json();
-    console.log("***** Authorization validation (agent user token) result:", agentUserTokenResult);
-    console.log("");
-
-    
-    /* Call the sidecar's authorization endpoint to exchange the user's token for a new one (OBO flow) */
+    /* Call the sidecar's authorization endpoint to exchange the user's token for a new one (OBO flow)
+    To make it work make sure to include the following enviromant variables:
+        - DownstreamApis__MyMCP__Scopes__0 = To the one you configured in the MCP app registration 
+     */
     var authorizationToken;
     try {
-      const oboTokenSidecarUrl = `${sidecarUrl}/AuthorizationHeader/MyApi?AgentIdentity=${agentIdentity}&optionsOverride.AcquireTokenOptions.ForceRefresh=true`;
-      console.log("**** Calling sidecar authorization endpoint:", oboTokenSidecarUrl);
+      authFlow = "on-behalf-of flow";
+      const oboTokenSidecarUrl = `${sidecarUrl}/AuthorizationHeader/MyMCP?AgentIdentity=${agentIdentity}&optionsOverride.AcquireTokenOptions.ForceRefresh=true`;
+      console.log(`**** Calling sidecar endpoint (${authFlow}):`, oboTokenSidecarUrl);
       const oboTokenResponse = await fetch(oboTokenSidecarUrl, {
         method: "GET",
         headers: {
@@ -141,7 +167,7 @@ export async function POST(request: NextRequest) {
       /* Check if the response contains "status" and it's not 200 */
       if (oboTokenResult.status && oboTokenResult.status !== 200) {
 
-        console.log("**** Authorization validation failed:", oboTokenResult);
+        console.log(`**** Authorization validation (${authFlow}) failed:`, oboTokenResult);
 
         /* Add app custom code to the result */
         oboTokenResult.appCustomCode = "Authentication error (2)"
@@ -153,11 +179,28 @@ export async function POST(request: NextRequest) {
       }
       else {
         authorizationToken = oboTokenResult.authorizationHeader;
-        //console.log("***** Authorization validation (on-behalf-of flow) result:", oboTokenResult.authorizationHeader);
+        console.log(`***** Authorization validation (${authFlow}) result:`, oboTokenResult.authorizationHeader);
       }
+    }
+    catch (error) {
+      /* If the authorization validation fails, return the error from the sidecar */
 
-      
+      /* Create an error JSON object with following attributes: detail, status and AppCustomCode */
+      const errorResult = {
+        detail: error instanceof Error ? error.message : "Unknown error",
+        status: 500,
+        appCustomCode: "Token acquisition error"
+      };
 
+      return NextResponse.json(
+        { error: errorResult },
+        { status: 400 }
+      );
+    }
+
+
+
+    try {
       /***********/
       const client = new Anthropic({
         apiKey: anthropicApiKey
