@@ -84,6 +84,18 @@ export async function POST(request: NextRequest) {
     }
     const agentUserAccountUpn = agentUserAccountUpnResult.value;
 
+    // Optionall parameters
+    const microsoftMcpServerUrl = process.env["Microsoft_MCP_SERVER_URL"];
+    const microsoftMcpServerDescription = process.env["Microsoft_MCP_SERVER_DESCRIPTION"];
+
+    if (microsoftMcpServerUrl == null) {
+      console.log("The Microsoft MCP server URL is not configured. To configure it, set up the Microsoft_MCP_SERVER_URL environment variable. ");
+    }
+
+    if (microsoftMcpServerDescription == null) {
+      console.log("The Microsoft MCP server description is not configured. To configure it, set up the Microsoft_MCP_SERVER_DESCRIPTION environment variable. ");
+    }
+
     /* Get the authorization header from the request */
     const authHeader = request.headers.get("authorization");
     if (!authHeader) {
@@ -149,7 +161,7 @@ export async function POST(request: NextRequest) {
     To make it work make sure to include the following enviromant variables:
         - DownstreamApis__MyMCP__Scopes__0 = To the one you configured in the MCP app registration 
      */
-    var authorizationToken;
+    var authorizationTokenForMyMcp;
     try {
       authFlow = "on-behalf-of flow";
       const oboTokenSidecarUrl = `${sidecarUrl}/AuthorizationHeader/MyMCP?AgentIdentity=${agentIdentity}&optionsOverride.AcquireTokenOptions.ForceRefresh=true`;
@@ -178,7 +190,7 @@ export async function POST(request: NextRequest) {
         );
       }
       else {
-        authorizationToken = oboTokenResult.authorizationHeader;
+        authorizationTokenForMyMcp = oboTokenResult.authorizationHeader;
         console.log(`***** Authorization validation (${authFlow}) result:`, oboTokenResult.authorizationHeader);
       }
     }
@@ -200,11 +212,110 @@ export async function POST(request: NextRequest) {
 
 
 
+    /* Call the sidecar's authorization endpoint to exchange the user's token for a new one (OBO flow) for the Microsoft MCP server
+    To make it work make sure to include the following enviromant variables:
+        - DownstreamApis__MicrosoftMCP__Scopes__0 = To the one you configured in the MCP app registration 
+     */
+    var authorizationTokenForMicrosoftMcp;
+    if (microsoftMcpServerUrl != null) {
+      try {
+        authFlow = "on-behalf-of flow";
+        const oboTokenSidecarUrl = `${sidecarUrl}/AuthorizationHeader/MicrosoftMCP?AgentIdentity=${agentIdentity}&optionsOverride.AcquireTokenOptions.ForceRefresh=true`;
+        console.log(`**** Calling sidecar endpoint (${authFlow}):`, oboTokenSidecarUrl);
+        const oboTokenResponse = await fetch(oboTokenSidecarUrl, {
+          method: "GET",
+          headers: {
+            Authorization: authHeader,
+          },
+        });
+
+
+        const oboTokenResult = await oboTokenResponse.json();
+
+        /* Check if the response contains "status" and it's not 200 */
+        if (oboTokenResult.status && oboTokenResult.status !== 200) {
+
+          console.log(`**** Authorization validation (${authFlow}) failed:`, oboTokenResult);
+
+          /* Add app custom code to the result */
+          oboTokenResult.appCustomCode = "Authentication error (2)"
+
+          return NextResponse.json(
+            { error: oboTokenResult },
+            { status: 401 }
+          );
+        }
+        else {
+          authorizationTokenForMicrosoftMcp = oboTokenResult.authorizationHeader;
+          console.log(`***** Authorization validation (${authFlow}) result:`, oboTokenResult.authorizationHeader);
+        }
+      }
+      catch (error) {
+        /* If the authorization validation fails, return the error from the sidecar */
+
+        /* Create an error JSON object with following attributes: detail, status and AppCustomCode */
+        const errorResult = {
+          detail: error instanceof Error ? error.message : "Unknown error",
+          status: 500,
+          appCustomCode: "Token acquisition for Microsoft MCP error"
+        };
+
+        return NextResponse.json(
+          { error: errorResult },
+          { status: 400 }
+        );
+      }
+    }
+
+
     try {
       /***********/
       const client = new Anthropic({
         apiKey: anthropicApiKey
       });
+
+      const mcpServers: Array<{
+        type: "url";
+        name: string;
+        url: string;
+        authorization_token?: string;
+      }> = [
+          {
+            type: "url",
+            name: "myMcp",
+            url: mcpServerUrl,
+            authorization_token: authorizationTokenForMyMcp
+          }
+        ];
+
+      if (microsoftMcpServerUrl != null) {
+        mcpServers.push({
+          type: "url",
+          name: "microsoftMcp",
+          url: microsoftMcpServerUrl,
+          authorization_token: authorizationTokenForMicrosoftMcp
+        });
+      }
+
+      const tools: Array<{
+        type: "mcp_toolset";
+        mcp_server_name: string;
+      }> = [
+          {
+            type: "mcp_toolset",
+            mcp_server_name: "myMcp"
+          }
+        ];
+
+      if (microsoftMcpServerUrl != null) {
+        tools.push({
+          type: "mcp_toolset",
+          mcp_server_name: "microsoftMcp"
+        });
+      }
+
+      // Print the list of MCP servers to the console
+      console.log("MCP servers configured for the agent:", mcpServers);
 
       const message = await client.beta.messages.create({
         max_tokens: 1024,
@@ -213,23 +324,11 @@ export async function POST(request: NextRequest) {
         system: [
           {
             type: "text",
-            text: "You can use tools from the connected MCP server. Discover tools from that server and call them when their descriptions indicate they are relevant to the user's request."
+            text: "You can use tools from the connected MCP server. Discover tools from that server and call them when their descriptions indicate they are relevant to the user's request. " + microsoftMcpServerDescription
           }
         ],
-        mcp_servers: [
-          {
-            type: "url",
-            name: "remoteMcp",
-            url: mcpServerUrl,
-            authorization_token: authorizationToken
-          }
-        ],
-        tools: [
-          {
-            type: "mcp_toolset",
-            mcp_server_name: "remoteMcp"
-          }
-        ],
+        mcp_servers: mcpServers,
+        tools: tools,
         betas: ["mcp-client-2025-11-20"]
       });
 
