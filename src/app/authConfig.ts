@@ -8,7 +8,7 @@ export const msalConfig: Configuration = {
     auth: {
         clientId: "739bdefd-7c03-4e81-ae50-89c858fb2d08",
         authority: "https://login.microsoftonline.com/61ce3eb4-4692-48a4-9af5-a63f5be45418", //  Replace the placeholder with your tenant info
-        redirectUri: 'http://localhost:3000', // You must register this URI on App Registration.
+        redirectUri: '/', // You must register this URI on App Registration.
     },
     cache: {
         cacheLocation: 'sessionStorage', // Configures cache location. "sessionStorage" is more secure, but "localStorage" gives you SSO.
