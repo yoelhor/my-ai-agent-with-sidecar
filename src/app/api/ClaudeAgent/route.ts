@@ -116,8 +116,8 @@ export async function POST(request: NextRequest) {
 
     try {
       /* Call the sidecar's authorization endpoint to get application token */
-      /* To make it work make sure to include the following enviromant variables:
-          - DownstreamApis__AppToken__RequestAppToken = ture
+      /* To make it work make sure to include the following environment variables:
+          - DownstreamApis__AppToken__RequestAppToken = true
           - DownstreamApis__AppToken__Scopes__0 = https://your-api/.default */
       const appTokenSidecarUrl = `${sidecarUrl}/AuthorizationHeaderUnauthenticated/AppToken?AgentIdentity=${agentIdentity}&optionsOverride.AcquireTokenOptions.ForceRefresh=true`;
       console.log(`**** Calling sidecar endpoint (${authFlow}):`, appTokenSidecarUrl);
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
 
     try {
       /* Call the sidecar's authorization endpoint to get agent's user account token */
-      /* To make it work make sure to include the following enviromant variables:
+      /* To make it work make sure to include the following environment variables:
           - Do NOT!!! set up DownstreamApis__AgentUserToken__RequestAppToken to true
           - DownstreamApis__AgentUserToken__Scopes__0 = https://graph.microsoft.com/User.Read, or something like api://12345678-1223-9876-5432-123456778812/mymcp.read 
           - Change the AgentIdentity to the agent user identity
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
 
 
     /* Call the sidecar's authorization endpoint to exchange the user's token for a new one (OBO flow)
-    To make it work make sure to include the following enviromant variables:
+    To make it work make sure to include the following environment variables:
         - DownstreamApis__MyMCP__Scopes__0 = To the one you configured in the MCP app registration 
      */
     var authorizationTokenForMyMcp;
@@ -213,8 +213,10 @@ export async function POST(request: NextRequest) {
 
 
     /* Call the sidecar's authorization endpoint to exchange the user's token for a new one (OBO flow) for the Microsoft MCP server
-    To make it work make sure to include the following enviromant variables:
-        - DownstreamApis__MicrosoftMCP__Scopes__0 = To the one you configured in the MCP app registration 
+    To make it work make sure to include the following environment variables:
+        - DownstreamApis__MicrosoftMCP__Scopes__0 = To the one you configured in the MCP app registration.
+          For example, for mail Work IQ use: 16b1878d-62c7-4009-aa25-68989d63bbad/Tools.ListInvoke.All (that's correct, without api:// just the ID) 
+          For Work IQ Canlendar use: 910333d2-47e9-43ca-981f-6df2f4531ef4/Tools.ListInvoke.All
      */
     var authorizationTokenForMicrosoftMcp;
     if (microsoftMcpServerUrl != null) {
