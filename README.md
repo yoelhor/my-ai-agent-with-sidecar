@@ -24,11 +24,11 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 # Web API environment variables
 
-- SIDECAR_URL — Endpoint URL for the Microsoft Entra SDK for Agent ID sidecar. Supports both local (localhost) and remote (cloud-hosted) targets.
-- MCP_SERVER_URL — Endpoint URL of the custom Model Context Protocol (MCP) server.
-- ANTHROPIC_API_KEY — Authentication key for the Anthropic API.
+- **SIDECAR_URL** — Endpoint URL for the Microsoft Entra SDK for Agent ID sidecar. Supports both local (localhost) and remote (cloud-hosted) targets.
+- **MCP_SERVER_URL** — Endpoint URL of the custom Model Context Protocol (MCP) server.
+- **ANTHROPIC_API_KEY** — Authentication key for the Anthropic API.
 AgentIdentity — The Microsoft Entra agent identity used to obtain access tokens via the On-Behalf-Of (OBO) flow for delegated access, and the client credentials flow for application-only access.
-- AgentUserAccountIdentity — The Entra agent identity representing a dedicated agent user account, required for agent user account scenarios.
-- AgentUserAccountUpn — The User Principal Name (UPN) of the agent user account.
-- [Optional] Microsoft_MCP_SERVER_URL — Endpoint URL of a Microsoft-hosted MCP server (e.g., Work IQ).
-- [Optional] Microsoft_MCP_SERVER_DESCRIPTION — Human-readable description of the Microsoft MCP server, surfaced in the agent's system prompt to inform tool selection.
+- **AgentUserAccountIdentity** — The Entra agent identity representing a dedicated agent user account, required for agent user account scenarios.
+- **AgentUserAccountUpn** — The User Principal Name (UPN) of the agent user account.
+- [Optional] **Microsoft_MCP_SERVER_URL** — Endpoint URL of a Microsoft-hosted MCP server (e.g., Work IQ).
+- [Optional] **Microsoft_MCP_SERVER_DESCRIPTION** — Human-readable description of the Microsoft MCP server, surfaced in the agent's system prompt to inform tool selection.
