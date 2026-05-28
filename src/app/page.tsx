@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useIsAuthenticated, useMsal } from "@azure/msal-react";
 import { Button, Form, Spinner } from "react-bootstrap";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { loginRequest } from "./authConfig";
 import styles from "./page.module.css";
 
@@ -52,7 +54,7 @@ export default function Home() {
       if (res.ok) {
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: data.reply },
+          { role: "assistant", content: data.reply},
         ]);
       } else {
         setMessages((prev) => [
@@ -99,7 +101,15 @@ export default function Home() {
                 >
                   <div className={styles.messageBubble}>
                     <strong>{msg.role === "user" ? "You" : "Agent"}</strong>
-                    <p>{msg.content}</p>
+                    {msg.role === "assistant" ? (
+                      <div className={styles.markdownContent}>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <p>{msg.content}</p>
+                    )}
                   </div>
                 </div>
               ))}

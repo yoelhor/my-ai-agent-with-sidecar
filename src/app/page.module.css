@@ -189,6 +189,49 @@ a.secondary {
   white-space: pre-wrap;
 }
 
+.markdownContent {
+  margin-top: 4px;
+}
+
+.markdownContent p,
+.markdownContent ul,
+.markdownContent ol,
+.markdownContent pre,
+.markdownContent blockquote {
+  margin: 0 0 8px;
+}
+
+.markdownContent p:last-child,
+.markdownContent ul:last-child,
+.markdownContent ol:last-child,
+.markdownContent pre:last-child,
+.markdownContent blockquote:last-child {
+  margin-bottom: 0;
+}
+
+.markdownContent ul,
+.markdownContent ol {
+  padding-left: 20px;
+}
+
+.markdownContent code {
+  background-color: rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.markdownContent pre {
+  background-color: rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 10px;
+  overflow-x: auto;
+}
+
+.markdownContent pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
 .userMessage .messageBubble {
   background-color: #0d6efd;
   color: #fff;

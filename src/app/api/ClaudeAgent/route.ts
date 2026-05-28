@@ -191,6 +191,7 @@ export async function POST(request: NextRequest) {
       }
       else {
         authorizationTokenForMyMcp = oboTokenResult.authorizationHeader;
+        authorizationTokenForMyMcp = authorizationTokenForMyMcp.replace(/^Bearer\s+/i, '');
         console.log(`***** Authorization validation (${authFlow}) result:`, oboTokenResult.authorizationHeader);
       }
     }
@@ -249,6 +250,10 @@ export async function POST(request: NextRequest) {
         }
         else {
           authorizationTokenForMicrosoftMcp = oboTokenResult.authorizationHeader;
+
+          // Remove the Bearer from the authorization header before printing it to the console
+          authorizationTokenForMicrosoftMcp = authorizationTokenForMicrosoftMcp.replace(/^Bearer\s+/i, '');
+
           console.log(`***** Authorization validation (${authFlow}) result:`, oboTokenResult.authorizationHeader);
         }
       }
