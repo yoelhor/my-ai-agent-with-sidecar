@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
     /* Sidecar environment variables:
         - DownstreamApis__BlobStorage__RequestAppToken = true
         - DownstreamApis__BlobStorage__Scopes__0 = https://storage.azure.com/.default */
-    await getAccessToken({
+    const authorizationTokenForBlobStorage = await getAccessToken({
       service: "BlobStorage",
       agentIdentity: agentIdentity,
       authFlow: "application token flow (Azure Blob Storage)",
@@ -232,9 +232,14 @@ export async function POST(request: NextRequest) {
       inboundAccessToken: authHeader,
     });
 
+    // If the propmpt contains the word BLOB (case insensitive), include the authorization token 
+    // for Azure Blob Storage in the tools configuration, otherwise use the authorizationTokenForMyMcp.
+    var accessTokenForMcpServer = authorizationTokenForMyMcp;
+    if (/BLOB/i.test(Prompt)) {
+      accessTokenForMcpServer = authorizationTokenForBlobStorage;
+    }
 
     try {
-      /***********/
       const client = new Anthropic({
         apiKey: anthropicApiKey
       });
@@ -249,7 +254,7 @@ export async function POST(request: NextRequest) {
             type: "url",
             name: "myMcp",
             url: mcpServerUrl,
-            authorization_token: authorizationTokenForMyMcp
+            authorization_token: accessTokenForMcpServer
           }
         ];
 
@@ -280,7 +285,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Print the list of MCP servers to the console
-      console.log("MCP servers configured for the agent:", mcpServers);
+      console.log("MCP servers configured for the agent:", mcpServers, "\n");
 
       const message = await client.beta.messages.create({
         max_tokens: 1024,
@@ -297,8 +302,8 @@ export async function POST(request: NextRequest) {
         betas: ["mcp-client-2025-11-20"]
       });
 
-
-      console.log(message.content);
+      // Print the full message object returned from the Anthropic API to the console for debugging
+      console.log("Full message object returned from the Anthropic API:", JSON.stringify(message, null, 2), "\n");
 
       /* Return the text content from the message */
       const textContent = message.content.map((item: any) => item.text).join("\n");
