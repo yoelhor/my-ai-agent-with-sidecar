@@ -112,167 +112,125 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    var authFlow = "application token flow";
+    let authFlow = "unknown flow";
 
-    try {
-      /* Call the sidecar's authorization endpoint to get application token */
-      /* To make it work make sure to include the following environment variables:
-          - DownstreamApis__AppToken__RequestAppToken = true
-          - DownstreamApis__AppToken__Scopes__0 = https://your-api/.default */
-      const appTokenSidecarUrl = `${sidecarUrl}/AuthorizationHeaderUnauthenticated/AppToken?AgentIdentity=${agentIdentity}&optionsOverride.AcquireTokenOptions.ForceRefresh=true`;
-      console.log(`**** Calling sidecar endpoint (${authFlow}):`, appTokenSidecarUrl);
-      const appTokenResponse = await fetch(appTokenSidecarUrl, {
-        method: "GET"
-      });
+    const getAccessToken = async ({
+      service,
+      agentIdentity,
+      authFlow,
+      inboundAccessToken,
+      agentUserAccountUpn,
+    }: {
+      service: string;
+      agentIdentity: string;
+      authFlow: string;
+      inboundAccessToken?: string;
+      agentUserAccountUpn?: string;
+    }) => {
 
+      // Determine the sidecar endpoint path based on whether an inbound access token is provided
+      const sidecarAuthPath = inboundAccessToken
+        ? "AuthorizationHeader"
+        : "AuthorizationHeaderUnauthenticated";
 
-      const appTokenResult = await appTokenResponse.json();
-      console.log(`***** Authorization validation (${authFlow}) result:`, appTokenResult);
-      console.log("");
-    }
-    catch (error) {
-      console.error(`**** Authorization validation (${authFlow}) failed:`, error instanceof Error ? error.message : error);
-    }
+      // Construct the sidecar URL with the appropriate path and query parameters
+      var appTokenSidecarUrl = `${sidecarUrl}/${sidecarAuthPath}/${service}?AgentIdentity=${agentIdentity}&optionsOverride.AcquireTokenOptions.ForceRefresh=true`;
 
-    try {
-      /* Call the sidecar's authorization endpoint to get agent's user account token */
-      /* To make it work make sure to include the following environment variables:
-          - Do NOT!!! set up DownstreamApis__AgentUserToken__RequestAppToken to true
-          - DownstreamApis__AgentUserToken__Scopes__0 = https://graph.microsoft.com/User.Read, or something like api://12345678-1223-9876-5432-123456778812/mymcp.read 
-          - Change the AgentIdentity to the agent user identity
-          - Change the AgentUsername to the agent user's username */
-      authFlow = "agent's user account flow";
-      const agentUserTokenSidecarUrl = `${sidecarUrl}/AuthorizationHeaderUnauthenticated/AgentUserToken?AgentIdentity=${agentUserAccountIdentity}&AgentUsername=${agentUserAccountUpn}&optionsOverride.AcquireTokenOptions.ForceRefresh=true`;
-      console.log(`**** Calling sidecar endpoint (${authFlow}):`, agentUserTokenSidecarUrl);
-      const agentUserTokenResponse = await fetch(agentUserTokenSidecarUrl, {
-        method: "GET"
-      });
-
-      const agentUserTokenResult = await agentUserTokenResponse.json();
-      console.log(`***** Authorization validation (${authFlow}) result:`, agentUserTokenResult);
-      console.log("");
-    }
-    catch (error) {
-      console.error(`**** Authorization validation (${authFlow}) failed:`, error instanceof Error ? error.message : error);
-    }
-
-
-    /* Call the sidecar's authorization endpoint to exchange the user's token for a new one (OBO flow)
-    To make it work make sure to include the following environment variables:
-        - DownstreamApis__MyMCP__Scopes__0 = To the one you configured in the MCP app registration 
-     */
-    var authorizationTokenForMyMcp;
-    try {
-      authFlow = "on-behalf-of flow";
-      const oboTokenSidecarUrl = `${sidecarUrl}/AuthorizationHeader/MyMCP?AgentIdentity=${agentIdentity}&optionsOverride.AcquireTokenOptions.ForceRefresh=true`;
-      console.log(`**** Calling sidecar endpoint (${authFlow}):`, oboTokenSidecarUrl);
-      const oboTokenResponse = await fetch(oboTokenSidecarUrl, {
-        method: "GET",
-        headers: {
-          Authorization: authHeader,
-        },
-      });
-
-
-      const oboTokenResult = await oboTokenResponse.json();
-
-      /* Check if the response contains "status" and it's not 200 */
-      if (oboTokenResult.status && oboTokenResult.status !== 200) {
-
-        console.log(`**** Authorization validation (${authFlow}) failed:`, oboTokenResult);
-
-        /* Add app custom code to the result */
-        oboTokenResult.appCustomCode = "Authentication error (2)"
-
-        return NextResponse.json(
-          { error: oboTokenResult },
-          { status: 401 }
-        );
+      // If agentUserAccountUpn is provided, add it as a query parameter to the sidecar URL
+      if (agentUserAccountUpn) {
+        appTokenSidecarUrl += `&AgentUsername=${encodeURIComponent(agentUserAccountUpn)}`;
       }
-      else {
-        authorizationTokenForMyMcp = oboTokenResult.authorizationHeader;
-        authorizationTokenForMyMcp = authorizationTokenForMyMcp.replace(/^Bearer\s+/i, '');
-        console.log(`***** Authorization validation (${authFlow}) result:`, oboTokenResult.authorizationHeader);
+
+      // If an inbound access token is provided, include it in the Authorization header
+      const headers: HeadersInit = {};
+      if (inboundAccessToken) {
+        headers.Authorization = inboundAccessToken;
       }
-    }
-    catch (error) {
-      /* If the authorization validation fails, return the error from the sidecar */
 
-      /* Create an error JSON object with following attributes: detail, status and AppCustomCode */
-      const errorResult = {
-        detail: error instanceof Error ? error.message : "Unknown error",
-        status: 500,
-        appCustomCode: "Token acquisition error"
-      };
-
-      return NextResponse.json(
-        { error: errorResult },
-        { status: 400 }
-      );
-    }
-
-
-
-    /* Call the sidecar's authorization endpoint to exchange the user's token for a new one (OBO flow) for the Microsoft MCP server
-    To make it work make sure to include the following environment variables:
-        - DownstreamApis__MicrosoftMCP__Scopes__0 = To the one you configured in the MCP app registration.
-          For example, for mail Work IQ use: 16b1878d-62c7-4009-aa25-68989d63bbad/Tools.ListInvoke.All (that's correct, without api:// just the ID) 
-          For Work IQ Canlendar use: 910333d2-47e9-43ca-981f-6df2f4531ef4/Tools.ListInvoke.All
-     */
-    var authorizationTokenForMicrosoftMcp;
-    if (microsoftMcpServerUrl != null) {
       try {
-        authFlow = "on-behalf-of flow";
-        const oboTokenSidecarUrl = `${sidecarUrl}/AuthorizationHeader/MicrosoftMCP?AgentIdentity=${agentIdentity}&optionsOverride.AcquireTokenOptions.ForceRefresh=true`;
-        console.log(`**** Calling sidecar endpoint (${authFlow}):`, oboTokenSidecarUrl);
-        const oboTokenResponse = await fetch(oboTokenSidecarUrl, {
+
+        // Call the sidecar endpoint to get an application token for the specified service
+        console.log(`**** Calling sidecar endpoint (${authFlow}):`, appTokenSidecarUrl);
+
+        const appTokenResponse = await fetch(appTokenSidecarUrl, {
           method: "GET",
-          headers: {
-            Authorization: authHeader,
-          },
+          headers,
         });
 
+        // Get the token from the response
+        const tokenResult = await appTokenResponse.json();
+        var accessToken: string = "";
 
-        const oboTokenResult = await oboTokenResponse.json();
-
-        /* Check if the response contains "status" and it's not 200 */
-        if (oboTokenResult.status && oboTokenResult.status !== 200) {
-
-          console.log(`**** Authorization validation (${authFlow}) failed:`, oboTokenResult);
-
-          /* Add app custom code to the result */
-          oboTokenResult.appCustomCode = "Authentication error (2)"
-
-          return NextResponse.json(
-            { error: oboTokenResult },
-            { status: 401 }
-          );
+        // Remove the Bearer from the authorization header before printing it to the console, if it exists in the result
+        if (tokenResult.authorizationHeader) {
+          accessToken = tokenResult.authorizationHeader.replace(/^Bearer\s+/i, '');
         }
-        else {
-          authorizationTokenForMicrosoftMcp = oboTokenResult.authorizationHeader;
 
-          // Remove the Bearer from the authorization header before printing it to the console
-          authorizationTokenForMicrosoftMcp = authorizationTokenForMicrosoftMcp.replace(/^Bearer\s+/i, '');
+        console.log(`***** Authorization validation (${authFlow}) result:`, accessToken);
+        console.log("");
 
-          console.log(`***** Authorization validation (${authFlow}) result:`, oboTokenResult.authorizationHeader);
-        }
+        return accessToken;
       }
       catch (error) {
-        /* If the authorization validation fails, return the error from the sidecar */
-
-        /* Create an error JSON object with following attributes: detail, status and AppCustomCode */
-        const errorResult = {
-          detail: error instanceof Error ? error.message : "Unknown error",
-          status: 500,
-          appCustomCode: "Token acquisition for Microsoft MCP error"
-        };
-
-        return NextResponse.json(
-          { error: errorResult },
-          { status: 400 }
-        );
+        console.error(`**** Authorization validation (${authFlow}) failed:`, error instanceof Error ? error.message : error);
+        return null;
       }
-    }
+    };
+
+    /* Get application token for a custom resource */
+    /* Sidecar environment variables:
+        - DownstreamApis__AppToken__RequestAppToken = true
+        - DownstreamApis__AppToken__Scopes__0 = https://your-api/.default */
+    await getAccessToken({
+      service: "AppToken",
+      agentIdentity: agentIdentity,
+      authFlow: "application token flow (custom resource)",
+    });
+
+
+    /* Get application token for a Azure Blob Storage */
+    /* Sidecar environment variables:
+        - DownstreamApis__BlobStorage__RequestAppToken = true
+        - DownstreamApis__BlobStorage__Scopes__0 = https://storage.azure.com/.default */
+    await getAccessToken({
+      service: "BlobStorage",
+      agentIdentity: agentIdentity,
+      authFlow: "application token flow (Azure Blob Storage)",
+    });
+
+
+    /* Get a token for agent's user account */
+    /* Sidecar environment variables:
+        - DownstreamApis__AgentUserToken__Scopes__0 = https://graph.microsoft.com/User.Read, or something like api://12345678-1223-9876-5432-123456778812/mymcp.read */
+    await getAccessToken({
+      service: "AgentUserToken",
+      agentIdentity: agentUserAccountIdentity,
+      authFlow: "agent's user account flow",
+      agentUserAccountUpn: agentUserAccountUpn,
+    });
+
+
+    /* Get a token for custom MCP server on behalf of a user (BOB) */
+    /* Sidecar environment variables:
+        - DownstreamApis__MyMCP__Scopes__0 = To the one you configured in the MCP app registration */
+    const authorizationTokenForMyMcp = await getAccessToken({
+      service: "MyMCP",
+      agentIdentity: agentIdentity,
+      authFlow: "on-behalf-of flow (custom MCP)",
+      inboundAccessToken: authHeader,
+    });
+
+    /* Get a token for custom MCP server on behalf of a user (BOB) */
+    /* Sidecar environment variables:
+          - DownstreamApis__MicrosoftMCP__Scopes__0 = To the one you configured in the MCP app registration.
+          For example, for mail Work IQ use: 16b1878d-62c7-4009-aa25-68989d63bbad/Tools.ListInvoke.All (that's correct, without api:// just the ID) 
+          For Work IQ Canlendar use: 910333d2-47e9-43ca-981f-6df2f4531ef4/Tools.ListInvoke.All */
+    const authorizationTokenForMicrosoftMcp = await getAccessToken({
+      service: "MicrosoftMCP",
+      agentIdentity: agentIdentity,
+      authFlow: "on-behalf-of flow (Microsoft MCP)",
+      inboundAccessToken: authHeader,
+    });
 
 
     try {
