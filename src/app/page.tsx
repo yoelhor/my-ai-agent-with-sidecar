@@ -13,17 +13,33 @@ interface Message {
   content: string;
 }
 
+type AgentProvider = "claude" | "aws";
+
+const PROVIDER_STORAGE_KEY = "selectedAgentProvider";
+
 export default function Home() {
   const isAuthenticated = useIsAuthenticated();
   const { instance, accounts } = useMsal();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [provider, setProvider] = useState<AgentProvider>("claude");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    const savedProvider = localStorage.getItem(PROVIDER_STORAGE_KEY);
+    if (savedProvider === "claude" || savedProvider === "aws") {
+      setProvider(savedProvider);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(PROVIDER_STORAGE_KEY, provider);
+  }, [provider]);
 
   const sendMessage = async () => {
     const prompt = input.trim();
@@ -40,7 +56,9 @@ export default function Home() {
         account: accounts[0],
       });
 
-      const res = await fetch("/api/ClaudeAgent", {
+      const endpoint = provider === "aws" ? "/api/AwsAgentCore" : "/api/ClaudeAgent";
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -122,6 +140,7 @@ export default function Home() {
               <div ref={messagesEndRef} />
             </div>
             <div className={styles.chatInput}>
+             
               <Form.Control
                 as="textarea"
                 rows={1}
@@ -139,6 +158,18 @@ export default function Home() {
                 Send
               </Button>
             </div>
+            <div className={styles.providerSelector}>
+               <Form.Select
+                value={provider}
+                onChange={(e) => setProvider(e.target.value as AgentProvider)}
+                disabled={loading}
+                className="mb-2"
+                aria-label="Select AI provider"
+              >
+                <option value="claude">Claude</option>
+                <option value="aws">AWS Agent Core</option>
+              </Form.Select>
+              </div>
           </div>
         ) : (
           <p>Please sign in to continue.</p>
