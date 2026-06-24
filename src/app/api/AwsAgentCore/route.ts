@@ -3,6 +3,24 @@ const { BedrockAgentCoreClient, InvokeAgentRuntimeCommand } = require("@aws-sdk/
 
 export async function POST(request: NextRequest) {
 
+    /* Get the authorization header from the request */
+    const authHeader = request.headers.get("authorization");
+    if (!authHeader) {
+
+        const errorResult = {
+            detail: "Authorization header is missing.",
+            status: 401,
+            appCustomCode: "Authentication error (1)"
+        };
+
+        return NextResponse.json(
+            { error: errorResult },
+            { status: errorResult.status }
+        );
+    }
+
+    console.log("Authorization header received.");
+
     /* Get the required environment variables */
     const agentRuntimeArn = getRequiredEnv("AWS_AgentRuntimeArn");
     if ("response" in agentRuntimeArn) {
@@ -37,7 +55,12 @@ export async function POST(request: NextRequest) {
         const input = {
             runtimeSessionId: sessionId,
             agentRuntimeArn: agentRuntimeArn.value,
-            payload: new TextEncoder().encode(JSON.stringify({ prompt })),
+            payload: new TextEncoder().encode(
+                JSON.stringify({
+                    prompt,
+                    authorization: authHeader,
+                })
+            ),
         };
 
         console.log("Input to AWS Bedrock AgentCore:", JSON.stringify(input));
