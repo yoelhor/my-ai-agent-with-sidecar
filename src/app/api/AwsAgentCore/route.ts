@@ -82,6 +82,9 @@ export async function POST(request: NextRequest) {
         let finalResponse = extractDeltaTextFromStream(textResponse);
         finalResponse = finalResponse.replace(/<thinking>.*?<\/thinking>/g, "").trim();
 
+        // The response may look like this: <response>The response content.</response>
+        finalResponse = finalResponse.replace(/<\/?response>/g, "").trim();
+
         return NextResponse.json({ reply: finalResponse || textResponse });
 
     } catch (error) {
