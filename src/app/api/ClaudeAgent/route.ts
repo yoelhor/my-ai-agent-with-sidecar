@@ -26,6 +26,13 @@ function getRequiredEnv(
 }
 
 export async function POST(request: NextRequest) {
+
+  console.error();
+  console.error("*********************************************");
+  console.error(`          ${new Date().toLocaleTimeString()}`);
+  console.error("*********************************************");
+  console.error();
+
   try {
     const body = await request.json();
     const { Prompt } = body;
@@ -159,6 +166,13 @@ export async function POST(request: NextRequest) {
 
         // Get the token from the response
         const tokenResult = await appTokenResponse.json();
+
+        // Check if the response status is 401 (Unauthorized) and log the error details if it is
+        if (tokenResult.status === 401) {
+          console.error(`**** Authorization validation (${authFlow}) failed with status 401:`, tokenResult);
+          return null;
+        }
+
         var accessToken: string = "";
 
         // Remove the Bearer from the authorization header before printing it to the console, if it exists in the result
@@ -258,7 +272,12 @@ export async function POST(request: NextRequest) {
           }
         ];
 
-      if (microsoftMcpServerUrl != null) {
+
+      // Check if the Microsoft MCP server is available by verifying that both the URL and authorization token are present
+      const microsoftMcpServerAvailable = microsoftMcpServerUrl != null && authorizationTokenForMicrosoftMcp != null;
+
+      // Add the Microsoft MCP server to the list of MCP servers if it is available
+      if (microsoftMcpServerAvailable) {
         mcpServers.push({
           type: "url",
           name: "microsoftMcp",
@@ -277,7 +296,7 @@ export async function POST(request: NextRequest) {
           }
         ];
 
-      if (microsoftMcpServerUrl != null) {
+      if (microsoftMcpServerAvailable) {
         tools.push({
           type: "mcp_toolset",
           mcp_server_name: "microsoftMcp"
